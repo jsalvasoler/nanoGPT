@@ -133,3 +133,49 @@ def test_config_update_multiple() -> None:
     assert config1.b == 3  # Updated by config2
     assert config1.c == 5  # Updated by config3
     assert config1.d == 6  # Added by config3
+
+
+def test_config_dict_access() -> None:
+    """Test dictionary-style access to config values."""
+    config = Config()
+    
+    # Test setting values
+    config["host"] = "localhost"
+    config["port"] = 8000
+    
+    # Test getting values
+    assert config["host"] == "localhost"
+    assert config["port"] == 8000
+    
+    # Test that dict access and attribute access are equivalent
+    assert config.host == config["host"]
+    assert config.port == config["port"]
+    
+    # Test accessing non-existent key
+    with pytest.raises(KeyError):
+        _ = config["nonexistent"]
+    
+    # Test that nested objects are deep copied
+    data = {"key": "value"}
+    config["data"] = data
+    data["key"] = "changed"
+    assert config["data"]["key"] == "value"  # Original value preserved
+
+
+def test_config_len() -> None:
+    """Test the length of the Config object."""
+    config = Config(a=1, b=2, c=3)
+    assert len(config) == 3
+
+
+def test_config_contains() -> None:
+    """Test the contains method of the Config object."""
+    config = Config(a=1, b=2, c=3)
+    assert "a" in config
+    assert "d" not in config
+
+
+def test_config_as_dict() -> None:
+    """Test the as_dict method of the Config object."""
+    config = Config(a=1, b=2, c=3)
+    assert config.as_dict() == {"a": 1, "b": 2, "c": 3}
