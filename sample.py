@@ -22,6 +22,7 @@ seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
+perplexity = False # whether to compute perplexity
 # -----------------------------------------------------------------------------
 
 # Load config overrides
@@ -114,6 +115,25 @@ def generate_samples(
                 print(decode(y[0].tolist()))
                 print('---------------')
 
+def compute_perplexity(
+    model: GPT,
+    encode: callable,
+    decode: callable,
+    start: str,
+    num_samples: int,
+    max_new_tokens: int,
+    temperature: float,
+    top_k: int,
+    device: str,
+    ctx: nullcontext | torch.amp.autocast
+) -> float:
+    """Compute perplexity of the model"""
+
+    
+
+
+    return 0.0
+
 def main() -> None:
     # Use the global config variables
     global init_from, out_dir, start, num_samples, max_new_tokens
@@ -130,10 +150,17 @@ def main() -> None:
     
     encode, decode = setup_encoding(init_from, checkpoint)
     
-    generate_samples(
-        model, encode, decode, start, num_samples, 
-        max_new_tokens, temperature, top_k, device, ctx
-    )
+    if perplexity:
+        perplexity_score = compute_perplexity(
+            model, encode, decode, start, num_samples,
+            max_new_tokens, temperature, top_k, device, ctx
+        )
+        print(f"Perplexity score: {perplexity_score}")
+    else:
+        generate_samples(
+            model, encode, decode, start, num_samples, 
+            max_new_tokens, temperature, top_k, device, ctx
+        )
 
 if __name__ == '__main__':
     main()
