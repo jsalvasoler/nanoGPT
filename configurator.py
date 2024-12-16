@@ -45,10 +45,10 @@ def get_config(config_name: str) -> Config:
 def get_config_from_args(args: list[str] | None = None, config: Config | None = None) -> Config:
     """Process command line arguments to build a config.
     We first load the base config, then override it with CLI arguments.
-    
+
     Args:
         args: List of command line arguments to process
-        
+
     Returns:
         Config object with processed arguments
     """
@@ -81,11 +81,11 @@ def get_config_from_args(args: list[str] | None = None, config: Config | None = 
                     # if that goes wrong, just use the string
                     attempt = val
                 # ensure the types match ok
-                assert type(attempt) == type(config[key])
+                assert isinstance(attempt, type(config[key]))
                 # cross fingers
                 print(f"Overriding: {key} = {attempt}")
                 config[key] = attempt
             else:
                 raise ValueError(f"Unknown config key: {key}")
-                
+
     return config

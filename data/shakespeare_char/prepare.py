@@ -6,8 +6,9 @@ encoder and decoder and some other related info.
 """
 import os
 import pickle
-import requests
+
 import numpy as np
+import requests
 
 # download the tiny shakespeare dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')
@@ -16,7 +17,7 @@ if not os.path.exists(input_file_path):
     with open(input_file_path, 'w') as f:
         f.write(requests.get(data_url).text)
 
-with open(input_file_path, 'r') as f:
+with open(input_file_path) as f:
     data = f.read()
 print(f"length of dataset in characters: {len(data):,}")
 

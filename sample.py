@@ -2,12 +2,15 @@
 Sample from a trained model
 """
 from __future__ import annotations
+
 import os
 import pickle
 from contextlib import nullcontext
-import torch
+
 import tiktoken
-from model import GPTConfig, GPT
+import torch
+
+from model import GPT, GPTConfig
 
 # -----------------------------------------------------------------------------
 # Default configuration - these values can be overridden by configurator.py
@@ -34,11 +37,11 @@ def setup_torch_config(seed: int, device: str, dtype: str) -> tuple[str, torch.d
     torch.cuda.manual_seed(seed)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    
+
     device_type = 'cuda' if 'cuda' in device else 'cpu'
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
     ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-    
+
     return device_type, ptdtype, ctx
 
 def load_model(init_from: str, out_dir: str, device: str, compile: bool) -> GPT:
@@ -71,7 +74,7 @@ def setup_encoding(init_from: str, checkpoint: dict | None = None) -> tuple[call
     if init_from == 'resume' and checkpoint and 'config' in checkpoint and 'dataset' in checkpoint['config']:
         meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
         load_meta = os.path.exists(meta_path)
-    
+
     if load_meta:
         print(f"Loading meta from {meta_path}...")
         with open(meta_path, 'rb') as f:
@@ -84,7 +87,7 @@ def setup_encoding(init_from: str, checkpoint: dict | None = None) -> tuple[call
         enc = tiktoken.get_encoding("gpt2")
         encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
         decode = lambda l: enc.decode(l)
-    
+
     return encode, decode
 
 def generate_samples(
@@ -102,7 +105,7 @@ def generate_samples(
     """Generate and print samples from the model"""
     # encode the beginning of the prompt
     if start.startswith('FILE:'):
-        with open(start[5:], 'r', encoding='utf-8') as f:
+        with open(start[5:], encoding='utf-8') as f:
             start = f.read()
     start_ids = encode(start)
     x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
@@ -129,7 +132,7 @@ def compute_perplexity(
 ) -> float:
     """Compute perplexity of the model"""
 
-    
+
 
 
     return 0.0
@@ -138,18 +141,18 @@ def main() -> None:
     # Use the global config variables
     global init_from, out_dir, start, num_samples, max_new_tokens
     global temperature, top_k, seed, device, dtype, compile
-    
+
     device_type, ptdtype, ctx = setup_torch_config(seed, device, dtype)
     model = load_model(init_from, out_dir, device, compile)
-    
+
     # Get the checkpoint if we're resuming
     checkpoint = None
     if init_from == 'resume':
         ckpt_path = os.path.join(out_dir, 'ckpt.pt')
         checkpoint = torch.load(ckpt_path, map_location=device)
-    
+
     encode, decode = setup_encoding(init_from, checkpoint)
-    
+
     if perplexity:
         perplexity_score = compute_perplexity(
             model, encode, decode, start, num_samples,
@@ -158,7 +161,7 @@ def main() -> None:
         print(f"Perplexity score: {perplexity_score}")
     else:
         generate_samples(
-            model, encode, decode, start, num_samples, 
+            model, encode, decode, start, num_samples,
             max_new_tokens, temperature, top_k, device, ctx
         )
 

@@ -1,6 +1,7 @@
 # create a config object with all parameters
-from config import Config
 import time
+
+from config import Config
 
 config = Config(
     # output directory for checkpoints and logging

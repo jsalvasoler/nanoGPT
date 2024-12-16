@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 from config import Config
 from configurator import get_config, get_config_from_args
 

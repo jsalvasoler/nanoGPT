@@ -17,21 +17,22 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 """
 
 from __future__ import annotations
-import os
-import time
+
 import math
+import os
 import pickle
+import time
 from contextlib import nullcontext
 from typing import Any
 
 import numpy as np
 import torch
+from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
 
 from config import Config
 from configurator import get_config_from_args
-from model import GPTConfig, GPT
+from model import GPT, GPTConfig
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -100,7 +101,7 @@ def setup_training(config: Config) -> tuple[dict[str, Any], GPT, torch.optim.Opt
         seed_offset = 0
         ddp_world_size = 1
         device = config.device
-    
+
     # setup state dict to return
     training_state = {
         'ddp': ddp,
@@ -117,13 +118,13 @@ def setup_training(config: Config) -> tuple[dict[str, Any], GPT, torch.optim.Opt
     torch.manual_seed(1337 + seed_offset)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    
+
     # Initialize model
     model, optimizer = setup_model(config, device)
-    
+
     # Initialize grad scaler
     scaler = torch.amp.GradScaler(enabled=(config.dtype == 'float16'))
-    
+
     if config.compile:
         print("compiling the model... (takes a ~minute)")
         model = torch.compile(model)
@@ -137,16 +138,16 @@ def setup_model(config: Config, device: str) -> tuple[GPT, torch.optim.Optimizer
     """Initialize and setup the model and optimizer."""
     # attempt to derive vocab_size from the dataset
     meta_vocab_size = get_vocab_size(config)
-    
-    model_args = dict(n_layer=config.n_layer, n_head=config.n_head, n_embd=config.n_embd, 
-                     block_size=config.block_size, bias=config.bias, vocab_size=None, 
+
+    model_args = dict(n_layer=config.n_layer, n_head=config.n_head, n_embd=config.n_embd,
+                     block_size=config.block_size, bias=config.bias, vocab_size=None,
                      dropout=config.dropout)
 
     model, model_args = initialize_model(config, model_args, meta_vocab_size, device)
     optimizer = model.configure_optimizers(config.weight_decay, config.learning_rate,
-                                        (config.beta1, config.beta2), 
+                                        (config.beta1, config.beta2),
                                         'cuda' if 'cuda' in device else 'cpu')
-    
+
     return model, optimizer
 
 def get_vocab_size(config: Config) -> int | None:
@@ -174,11 +175,11 @@ def initialize_model(config: Config, model_args: dict, meta_vocab_size: int | No
         model, model_args = resume_from_checkpoint(config, model_args, device)
     elif config.init_from.startswith('gpt2'):
         model, model_args = initialize_from_gpt2(config, model_args)
-    
+
     if config.block_size < model.config.block_size:
         model.crop_block_size(config.block_size)
         model_args['block_size'] = config.block_size
-    
+
     model.to(device)
     return model, model_args
 
@@ -188,22 +189,22 @@ def resume_from_checkpoint(config: Config, model_args: dict, device: str) -> tup
     ckpt_path = os.path.join(config.out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
-    
+
     # force these config attributes to be equal otherwise we can't resume training
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
-    
+
     # create the model
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
     state_dict = checkpoint['model']
-    
+
     # fix the keys of the state dictionary
     unwanted_prefix = '_orig_mod.'
     for k, v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    
+
     model.load_state_dict(state_dict)
     return model, model_args
 
@@ -212,33 +213,33 @@ def initialize_from_gpt2(config: Config, model_args: dict) -> tuple[GPT, dict]:
     print(f"Initializing from OpenAI GPT-2 weights: {config.init_from}")
     override_args = dict(dropout=config.dropout)
     model = GPT.from_pretrained(config.init_from, override_args)
-    
+
     # read off the created config params
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
-    
+
     return model, model_args
 
 def get_batch(split: str, config: Config, device_type: str) -> tuple[torch.Tensor, torch.Tensor]:
     """Get a batch of data."""
     data_dir = os.path.join('data', config.dataset)
-    
+
     # Recreate np.memmap every batch to avoid memory leak
     if split == 'train':
         data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
     else:
         data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    
+
     ix = torch.randint(len(data) - config.block_size, (config.batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+config.block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+config.block_size]).astype(np.int64)) for i in ix])
-    
+
     if device_type == 'cuda':
         # pin arrays x,y, which allows us to move them to GPU asynchronously
         x, y = x.pin_memory().to(config.device, non_blocking=True), y.pin_memory().to(config.device, non_blocking=True)
     else:
         x, y = x.to(config.device), y.to(config.device)
-    
+
     return x, y
 
 @torch.no_grad()
@@ -262,48 +263,48 @@ def get_lr(iter_num: int, config: Config) -> float:
     # 1) linear warmup for warmup_iters steps
     if iter_num < config.warmup_iters:
         return config.learning_rate * (iter_num + 1) / (config.warmup_iters + 1)
-    
+
     # 2) if iter > lr_decay_iters, return min learning rate
     if iter_num > config.lr_decay_iters:
         return config.min_lr
-    
+
     # 3) in between, use cosine decay down to min learning rate
     decay_ratio = (iter_num - config.warmup_iters) / (config.lr_decay_iters - config.warmup_iters)
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
     return config.min_lr + coeff * (config.learning_rate - config.min_lr)
 
-def train_loop(config: Config, model: GPT, optimizer: torch.optim.Optimizer, 
+def train_loop(config: Config, model: GPT, optimizer: torch.optim.Optimizer,
                scaler: torch.cuda.GradScaler, training_state: dict) -> None:
     """Main training loop."""
     # setup context
     device_type = 'cuda' if 'cuda' in config.device else 'cpu'
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[config.dtype]
     ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-    
+
     # init wandb if needed
     if config.wandb_log and training_state['master_process']:
         import wandb
         wandb.init(project=config.wandb_project, name=config.wandb_run_name, config=config.as_dict())
-    
+
     # training loop
     X, Y = get_batch('train', config, device_type)
     t0 = time.time()
     local_iter_num = 0
     raw_model = model.module if training_state['ddp'] else model
     running_mfu = -1.0
-    
+
     while True:
         # determine and set the learning rate for this iteration
         lr = get_lr(training_state['iter_num'], config) if config.decay_lr else config.learning_rate
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
-        
+
         # evaluate the loss on train/val sets and write checkpoints
         if training_state['iter_num'] % config.eval_interval == 0 and training_state['master_process']:
             losses = estimate_loss(model, config, ctx)
             print(f"step {training_state['iter_num']}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-            
+
             if config.wandb_log:
                 wandb.log({
                     "iter": training_state['iter_num'],
@@ -312,7 +313,7 @@ def train_loop(config: Config, model: GPT, optimizer: torch.optim.Optimizer,
                     "lr": lr,
                     "mfu": running_mfu*100,  # convert to percentage
                 })
-            
+
             if losses['val'] < training_state['best_val_loss'] or config.always_save_checkpoint:
                 training_state['best_val_loss'] = losses['val']
                 if training_state['iter_num'] > 0:
@@ -326,47 +327,47 @@ def train_loop(config: Config, model: GPT, optimizer: torch.optim.Optimizer,
                     }
                     print(f"saving checkpoint to {config.out_dir}")
                     torch.save(checkpoint, os.path.join(config.out_dir, 'ckpt.pt'))
-        
+
         if training_state['iter_num'] == 0 and config.eval_only:
             break
-        
+
         # forward backward update, with optional gradient accumulation to simulate larger batch size
         for micro_step in range(config.gradient_accumulation_steps):
             if training_state['ddp']:
                 # in DDP training we only need to sync gradients at the last micro step
                 model.require_backward_grad_sync = (micro_step == config.gradient_accumulation_steps - 1)
-            
+
             with ctx:
                 logits, loss = model(X, Y)
                 loss = loss / config.gradient_accumulation_steps
-            
+
             X, Y = get_batch('train', config, device_type)
             scaler.scale(loss).backward()
-        
+
         # clip the gradient
         if config.grad_clip != 0.0:
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
-        
+
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad(set_to_none=True)
-        
+
         # timing and logging
         t1 = time.time()
         dt = t1 - t0
         t0 = t1
-        
+
         if training_state['iter_num'] % config.log_interval == 0 and training_state['master_process']:
             lossf = loss.item() * config.gradient_accumulation_steps
             if local_iter_num >= 5:
                 mfu = raw_model.estimate_mfu(config.batch_size * config.gradient_accumulation_steps, dt)
                 running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
             print(f"iter {training_state['iter_num']}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
-        
+
         training_state['iter_num'] += 1
         local_iter_num += 1
-        
+
         # termination conditions
         if training_state['iter_num'] > config.max_iters:
             break
@@ -376,13 +377,13 @@ def main() -> None:
     # overrides from command line or config file
     global config
     config = get_config_from_args(config=config)
-    
+
     # Setup training environment
     training_state, model, optimizer, scaler = setup_training(config)
-    
+
     # Start training
     train_loop(config, model, optimizer, scaler, training_state)
-    
+
     if training_state['ddp']:
         destroy_process_group()
 
