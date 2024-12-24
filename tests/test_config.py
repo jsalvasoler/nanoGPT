@@ -72,8 +72,8 @@ def test_config_update() -> None:
 
     config1.update(config2)
     assert config1.host == "localhost"  # Keeps original value
-    assert config1.port == 9000        # Updated value
-    assert config1.debug is True       # New value
+    assert config1.port == 9000  # Updated value
+    assert config1.debug is True  # New value
 
 
 def test_config_iteration() -> None:
@@ -82,11 +82,7 @@ def test_config_iteration() -> None:
 
     # Convert to dict for easy comparison
     config_dict = dict(config)
-    assert config_dict == {
-        "host": "localhost",
-        "port": 8000,
-        "debug": True
-    }
+    assert config_dict == {"host": "localhost", "port": 8000, "debug": True}
 
     # Test iteration directly
     keys = []

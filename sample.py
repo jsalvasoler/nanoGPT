@@ -1,59 +1,41 @@
 """
 Sample from a trained model
 """
+
 from __future__ import annotations
 
 import os
-from tqdm import tqdm
-import time
 import pickle
 from contextlib import nullcontext
 
 import tiktoken
 import torch
 
-from model import GPT, GPTConfig
-from utils import get_batch, get_validation
 from config import Config
-from configurator import get_config, get_config_from_args
+from configurator import get_config_from_args
+from model import GPT, GPTConfig
 
 # -----------------------------------------------------------------------------
 # Default configuration - these values can be overridden by configurator.py
 config = Config(
     # model initialization
-    init_from='resume',  # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
-    out_dir='out',  # ignored if init_from is not 'resume'
+    init_from="resume",  # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
+    out_dir="out",  # ignored if init_from is not 'resume'
     start="\n",  # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
-    
-    # model parameters for perplexity
-    dataset='shakespeare_char',
-    block_size=64,
-    batch_size=12,
-    n_layer=4,
-    n_head=4,
-    n_embd=128,
-    max_iters=2000,
-    lr_decay_iters=2000,
-    dropout=0.0,
-
     # sampling parameters
     num_samples=10,  # number of samples to draw
     max_new_tokens=500,  # number of tokens generated in each sample
     temperature=0.8,  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
     top_k=200,  # retain only the top_k most likely tokens, clamp others to have 0 probability
-    
     # system parameters
     seed=1337,
-    device='cuda',  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-    dtype='bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16',
+    device="cuda",  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
+    dtype="bfloat16" if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else "float16",
     compile=False,  # use PyTorch 2.0 to compile the model to be faster
-
     perplexity=True,
 )
 # -----------------------------------------------------------------------------
 
-# Load config overrides
-config = get_config_from_args(config=config)  # overrides from command line or config file
 
 def setup_torch_config(config: Config) -> tuple[str, torch.dtype, nullcontext | torch.amp.autocast]:
     """Set up PyTorch configuration and return device type, dtype and context"""
@@ -62,27 +44,28 @@ def setup_torch_config(config: Config) -> tuple[str, torch.dtype, nullcontext | 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
-    device_type = 'cuda' if 'cuda' in config.device else 'cpu'
-    ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[config.dtype]
-    ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+    device_type = "cuda" if "cuda" in config.device else "cpu"
+    ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[config.dtype]
+    ctx = nullcontext() if device_type == "cpu" else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
     return device_type, ptdtype, ctx
 
+
 def load_model(config: Config) -> GPT:
     """Load and configure the model"""
-    if config.init_from == 'resume':
+    if config.init_from == "resume":
         # init from a model saved in a specific directory
-        ckpt_path = os.path.join(config.out_dir, 'ckpt.pt')
+        ckpt_path = os.path.join(config.out_dir, "ckpt.pt")
         checkpoint = torch.load(ckpt_path, map_location=config.device)
-        gptconf = GPTConfig(**checkpoint['model_args'])
+        gptconf = GPTConfig(**checkpoint["model_args"])
         model = GPT(gptconf)
-        state_dict = checkpoint['model']
-        unwanted_prefix = '_orig_mod.'
-        for k,v in list(state_dict.items()):
+        state_dict = checkpoint["model"]
+        unwanted_prefix = "_orig_mod."
+        for k, v in list(state_dict.items()):
             if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+                state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
         model.load_state_dict(state_dict)
-    elif config.init_from.startswith('gpt2'):
+    elif config.init_from.startswith("gpt2"):
         # init from a given GPT-2 model
         model = GPT.from_pretrained(config.init_from, dict(dropout=0.0))
 
@@ -92,20 +75,21 @@ def load_model(config: Config) -> GPT:
         model = torch.compile(model)
     return model
 
+
 def setup_encoding(init_from: str, checkpoint: dict | None = None) -> tuple[callable, callable]:
     """Set up encoding and decoding functions"""
     load_meta = False
-    if init_from == 'resume' and checkpoint and 'config' in checkpoint and 'dataset' in checkpoint['config']:
-        meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
+    if init_from == "resume" and checkpoint and "config" in checkpoint and "dataset" in checkpoint["config"]:
+        meta_path = os.path.join("data", checkpoint["config"]["dataset"], "meta.pkl")
         load_meta = os.path.exists(meta_path)
 
     if load_meta:
         print(f"Loading meta from {meta_path}...")
-        with open(meta_path, 'rb') as f:
+        with open(meta_path, "rb") as f:
             meta = pickle.load(f)
-        stoi, itos = meta['stoi'], meta['itos']
+        stoi, itos = meta["stoi"], meta["itos"]
         encode = lambda s: [stoi[c] for c in s]
-        decode = lambda l: ''.join([itos[i] for i in l])
+        decode = lambda l: "".join([itos[i] for i in l])
     else:
         print("No meta.pkl found, assuming GPT-2 encodings...")
         enc = tiktoken.get_encoding("gpt2")
@@ -114,17 +98,14 @@ def setup_encoding(init_from: str, checkpoint: dict | None = None) -> tuple[call
 
     return encode, decode
 
+
 def generate_samples(
-    model: GPT,
-    encode: callable,
-    decode: callable,
-    config: Config,
-    ctx: nullcontext | torch.amp.autocast
+    model: GPT, encode: callable, decode: callable, config: Config, ctx: nullcontext | torch.amp.autocast
 ) -> None:
     """Generate and print samples from the model"""
     # encode the beginning of the prompt
-    if config.start.startswith('FILE:'):
-        with open(config.start[5:], encoding='utf-8') as f:
+    if config.start.startswith("FILE:"):
+        with open(config.start[5:], encoding="utf-8") as f:
             start = f.read()
     else:
         start = config.start
@@ -137,73 +118,28 @@ def generate_samples(
             for k in range(config.num_samples):
                 y = model.generate(x, config.max_new_tokens, temperature=config.temperature, top_k=config.top_k)
                 print(decode(y[0].tolist()))
-                print('---------------')
+                print("---------------")
 
-def compute_perplexity(
-    model: GPT,
-    config: Config,
-    ctx: nullcontext | torch.amp.autocast
-) -> float:
-    """Compute perplexity of the model"""
-    X, y = get_validation(config)
-    
-    # Calculate number of batches
-    n_samples = X.shape[0]
-    n_batches = (n_samples + config.batch_size - 1) // config.batch_size
-    
-    total_log_probs = []
-    
-    with torch.no_grad():
-        with ctx:
-            for i in tqdm(range(n_batches)):
-                # Get batch indices
-                start_idx = i * config.batch_size
-                end_idx = min((i + 1) * config.batch_size, n_samples)
-                
-                # Get batch data
-                X_batch = X[start_idx:end_idx]
-                y_batch = y[start_idx:end_idx]
-                
-                # Forward pass
-                logits, _ = model(X_batch)
-                logits = logits[:, -1, :]
-                # convert to probabilities
-                probs = torch.softmax(logits, dim=-1)
-                # get the predicted logits for the y index
-                pred_probs = probs[torch.arange(len(y_batch)), y_batch.int()]
-                # apply log
-                log_probs = torch.log(pred_probs)
-                total_log_probs.append(log_probs)
-    
-    # Concatenate all log probabilities and compute mean
-    all_log_probs = torch.cat(total_log_probs)
-    perplexity = torch.exp(-all_log_probs.mean()).item()
-
-    return perplexity
 
 def main() -> None:
+    global config
+
+    # Load config overrides
+    config = get_config_from_args(config=config)  # overrides from command line or config file
+
     device_type, ptdtype, ctx = setup_torch_config(config)
     model = load_model(config)
 
     # Get the checkpoint if we're resuming
     checkpoint = None
-    if config.init_from == 'resume':
-        ckpt_path = os.path.join(config.out_dir, 'ckpt.pt')
+    if config.init_from == "resume":
+        ckpt_path = os.path.join(config.out_dir, "ckpt.pt")
         checkpoint = torch.load(ckpt_path, map_location=config.device)
 
     encode, decode = setup_encoding(config.init_from, checkpoint)
 
-    if config.perplexity:
-        start_time = time.time()
-        perplexity_score = compute_perplexity(
-            model, config, ctx
-        )
-        print(f"Perplexity score: {perplexity_score:.2f}")
-        print(f"Time taken: {time.time() - start_time:.2f} seconds")
-    else:
-        generate_samples(
-            model, encode, decode, config, ctx
-        )
+    generate_samples(model, encode, decode, config, ctx)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
