@@ -25,13 +25,13 @@ import time
 from contextlib import nullcontext
 from typing import Any
 
-import numpy as np
 import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from config import Config
 from configurator import get_config_from_args
+from utils import get_batch
 from model import GPT, GPTConfig
 
 # -----------------------------------------------------------------------------
@@ -219,28 +219,6 @@ def initialize_from_gpt2(config: Config, model_args: dict) -> tuple[GPT, dict]:
         model_args[k] = getattr(model.config, k)
 
     return model, model_args
-
-def get_batch(split: str, config: Config, device_type: str) -> tuple[torch.Tensor, torch.Tensor]:
-    """Get a batch of data."""
-    data_dir = os.path.join('data', config.dataset)
-
-    # Recreate np.memmap every batch to avoid memory leak
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-
-    ix = torch.randint(len(data) - config.block_size, (config.batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+config.block_size]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+config.block_size]).astype(np.int64)) for i in ix])
-
-    if device_type == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously
-        x, y = x.pin_memory().to(config.device, non_blocking=True), y.pin_memory().to(config.device, non_blocking=True)
-    else:
-        x, y = x.to(config.device), y.to(config.device)
-
-    return x, y
 
 @torch.no_grad()
 def estimate_loss(model: GPT, config: Config, ctx: nullcontext) -> dict[str, float]:

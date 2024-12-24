@@ -11,6 +11,7 @@ import tiktoken
 import torch
 
 from model import GPT, GPTConfig
+from utils import get_batch
 
 # -----------------------------------------------------------------------------
 # Default configuration - these values can be overridden by configurator.py
@@ -108,7 +109,7 @@ def generate_samples(
         with open(start[5:], encoding='utf-8') as f:
             start = f.read()
     start_ids = encode(start)
-    x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+    x = torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...]
 
     # run generation
     with torch.no_grad():
