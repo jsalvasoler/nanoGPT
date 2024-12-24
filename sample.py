@@ -4,6 +4,8 @@ Sample from a trained model
 from __future__ import annotations
 
 import os
+from tqdm import tqdm
+import time
 import pickle
 from contextlib import nullcontext
 
@@ -11,9 +13,9 @@ import tiktoken
 import torch
 
 from model import GPT, GPTConfig
-from utils import get_batch
+from utils import get_batch, get_validation
 from config import Config
-from configurator import get_config_from_args
+from configurator import get_config, get_config_from_args
 
 # -----------------------------------------------------------------------------
 # Default configuration - these values can be overridden by configurator.py
@@ -23,6 +25,17 @@ config = Config(
     out_dir='out',  # ignored if init_from is not 'resume'
     start="\n",  # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
     
+    # model parameters for perplexity
+    dataset='shakespeare_char',
+    block_size=64,
+    batch_size=12,
+    n_layer=4,
+    n_head=4,
+    n_embd=128,
+    max_iters=2000,
+    lr_decay_iters=2000,
+    dropout=0.0,
+
     # sampling parameters
     num_samples=10,  # number of samples to draw
     max_new_tokens=500,  # number of tokens generated in each sample
@@ -34,7 +47,8 @@ config = Config(
     device='cuda',  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
     dtype='bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16',
     compile=False,  # use PyTorch 2.0 to compile the model to be faster
-    perplexity=False  # whether to compute perplexity
+
+    perplexity=True,
 )
 # -----------------------------------------------------------------------------
 
@@ -127,17 +141,45 @@ def generate_samples(
 
 def compute_perplexity(
     model: GPT,
-    encode: callable,
-    decode: callable,
     config: Config,
     ctx: nullcontext | torch.amp.autocast
 ) -> float:
     """Compute perplexity of the model"""
+    X, y = get_validation(config)
+    
+    # Calculate number of batches
+    n_samples = X.shape[0]
+    n_batches = (n_samples + config.batch_size - 1) // config.batch_size
+    
+    total_log_probs = []
+    
+    with torch.no_grad():
+        with ctx:
+            for i in tqdm(range(n_batches)):
+                # Get batch indices
+                start_idx = i * config.batch_size
+                end_idx = min((i + 1) * config.batch_size, n_samples)
+                
+                # Get batch data
+                X_batch = X[start_idx:end_idx]
+                y_batch = y[start_idx:end_idx]
+                
+                # Forward pass
+                logits, _ = model(X_batch)
+                logits = logits[:, -1, :]
+                # convert to probabilities
+                probs = torch.softmax(logits, dim=-1)
+                # get the predicted logits for the y index
+                pred_probs = probs[torch.arange(len(y_batch)), y_batch.int()]
+                # apply log
+                log_probs = torch.log(pred_probs)
+                total_log_probs.append(log_probs)
+    
+    # Concatenate all log probabilities and compute mean
+    all_log_probs = torch.cat(total_log_probs)
+    perplexity = torch.exp(-all_log_probs.mean()).item()
 
-
-
-
-    return 0.0
+    return perplexity
 
 def main() -> None:
     device_type, ptdtype, ctx = setup_torch_config(config)
@@ -152,10 +194,12 @@ def main() -> None:
     encode, decode = setup_encoding(config.init_from, checkpoint)
 
     if config.perplexity:
+        start_time = time.time()
         perplexity_score = compute_perplexity(
-            model, encode, decode, config, ctx
+            model, config, ctx
         )
-        print(f"Perplexity score: {perplexity_score}")
+        print(f"Perplexity score: {perplexity_score:.2f}")
+        print(f"Time taken: {time.time() - start_time:.2f} seconds")
     else:
         generate_samples(
             model, encode, decode, config, ctx
