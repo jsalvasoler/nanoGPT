@@ -5,6 +5,7 @@ Evaluation utilities for the model
 from __future__ import annotations
 
 from contextlib import nullcontext
+from datetime import datetime
 
 import torch
 from tqdm import tqdm
@@ -72,6 +73,7 @@ def compute_perplexity(model: GPT, config: Config, ctx: nullcontext | torch.amp.
 
 
 def main() -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     global config
 
     config = get_config_from_args(config=config)  # overrides from command line or config file
@@ -81,6 +83,18 @@ def main() -> None:
 
     perplexity = compute_perplexity(model, config, ctx)
     print(f"Perplexity: {perplexity:.2f}")
+
+    d = {
+        "model_params": model.get_num_params(),
+        "config": config.__dict__,
+        "perplexity": perplexity,
+    }
+    import json
+    import os
+
+    os.makedirs("eval", exist_ok=True)
+    with open(f"eval/evaluate_{timestamp}.json", "w") as f:
+        json.dump(d, f)
 
 
 if __name__ == "__main__":

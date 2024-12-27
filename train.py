@@ -23,6 +23,7 @@ import os
 import pickle
 import time
 from contextlib import nullcontext
+from datetime import datetime
 from typing import Any
 
 import torch
@@ -373,6 +374,20 @@ def train_loop(
         # termination conditions
         if training_state["iter_num"] > config.max_iters:
             break
+
+    d = {
+        "config": config.__dict__,
+        "model_params": model.get_num_params(),
+        "iter_num": training_state["iter_num"],
+        "loss_train": losses["train"].item(),
+        "loss_val": losses["val"].item(),
+    }
+    import json
+
+    os.makedirs("eval", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    with open(f"eval/train_{timestamp}.json", "w") as f:
+        json.dump(d, f)
 
 
 def main() -> None:

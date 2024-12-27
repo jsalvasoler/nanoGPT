@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import timeit
 from contextlib import nullcontext
 
 import tiktoken
@@ -112,13 +113,19 @@ def generate_samples(
     start_ids = encode(start)
     x = torch.tensor(start_ids, dtype=torch.long, device=config.device)[None, ...]
 
+    time = 0
     # run generation
     with torch.no_grad():
         with ctx:
             for k in range(config.num_samples):
+                start_time = timeit.default_timer()
                 y = model.generate(x, config.max_new_tokens, temperature=config.temperature, top_k=config.top_k)
                 print(decode(y[0].tolist()))
                 print("---------------")
+                end_time = timeit.default_timer()
+                time += end_time - start_time
+    print(f"Average time per sample: {time / config.num_samples:.2f} seconds")
+    print(f"Tokens per second: {config.num_samples * config.max_new_tokens / time:.2f}")
 
 
 def main() -> None:
