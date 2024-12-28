@@ -57,7 +57,7 @@ def load_model(config: Config) -> GPT:
     if config.init_from == "resume":
         # init from a model saved in a specific directory
         ckpt_path = os.path.join(config.out_dir, "ckpt.pt")
-        checkpoint = torch.load(ckpt_path, map_location=config.device)
+        checkpoint = torch.load(ckpt_path, map_location=config.device, weights_only=True)
         gptconf = GPTConfig(**checkpoint["model_args"])
         model = GPT(gptconf)
         state_dict = checkpoint["model"]
@@ -141,7 +141,7 @@ def main() -> None:
     checkpoint = None
     if config.init_from == "resume":
         ckpt_path = os.path.join(config.out_dir, "ckpt.pt")
-        checkpoint = torch.load(ckpt_path, map_location=config.device)
+        checkpoint = torch.load(ckpt_path, map_location=config.device, weights_only=True)
 
     encode, decode = setup_encoding(config.init_from, checkpoint)
 

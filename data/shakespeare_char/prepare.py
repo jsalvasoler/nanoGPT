@@ -44,19 +44,25 @@ def decode(l):
 # create the train and test splits
 n = len(data)
 train_data = data[: int(n * 0.9)]
-val_data = data[int(n * 0.9) :]
+val_data = data[int(n * 0.9) : int(n * 0.95)]
+cal_data = data[int(n * 0.95) :]    # calibration
 
 # encode both to integers
 train_ids = encode(train_data)
 val_ids = encode(val_data)
+cal_ids = encode(cal_data)
+
 print(f"train has {len(train_ids):,} tokens")
 print(f"val has {len(val_ids):,} tokens")
+print(f"cal has {len(cal_ids):,} tokens")
 
 # export to bin files
 train_ids = np.array(train_ids, dtype=np.uint16)
 val_ids = np.array(val_ids, dtype=np.uint16)
+cal_ids = np.array(cal_ids, dtype=np.uint16)
 train_ids.tofile(os.path.join(os.path.dirname(__file__), "train.bin"))
 val_ids.tofile(os.path.join(os.path.dirname(__file__), "val.bin"))
+cal_ids.tofile(os.path.join(os.path.dirname(__file__), "cal.bin"))
 
 # save the meta information as well, to help us encode/decode later
 meta = {
@@ -67,9 +73,10 @@ meta = {
 with open(os.path.join(os.path.dirname(__file__), "meta.pkl"), "wb") as f:
     pickle.dump(meta, f)
 
-# length of dataset in characters:  1115394
-# all the unique characters:
+# length of dataset in characters: 1,115,394
+# all the unique characters: 
 #  !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 # vocab size: 65
-# train has 1003854 tokens
-# val has 111540 tokens
+# train has 1,003,854 tokens
+# val has 55,770 tokens
+# cal has 55,770 tokens

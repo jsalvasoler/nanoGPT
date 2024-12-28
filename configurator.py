@@ -81,7 +81,8 @@ def get_config_from_args(args: list[str] | None = None, config: Config | None = 
                     # if that goes wrong, just use the string
                     attempt = val
                 # ensure the types match ok
-                assert isinstance(attempt, type(config[key]))
+                assert isinstance(attempt, type(config[key])), \
+                    f"Type mismatch for {key}: {type(attempt)} != {type(config[key])}"
                 # cross fingers
                 print(f"Overriding: {key} = {attempt}")
                 config[key] = attempt

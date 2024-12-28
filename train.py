@@ -200,7 +200,7 @@ def resume_from_checkpoint(config: Config, model_args: dict, device: str) -> tup
     """Resume training from a checkpoint."""
     print(f"Resuming training from {config.out_dir}")
     ckpt_path = os.path.join(config.out_dir, "ckpt.pt")
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    checkpoint = torch.load(ckpt_path, map_location=device, weights_only=True)
     checkpoint_model_args = checkpoint["model_args"]
 
     # force these config attributes to be equal otherwise we can't resume training

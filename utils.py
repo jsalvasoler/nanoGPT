@@ -29,10 +29,11 @@ def get_batch(split: str, config: Config, device_type: str) -> tuple[torch.Tenso
     return x, y
 
 
-def get_validation(config: Config) -> tuple[torch.Tensor, torch.Tensor]:
+def get_validation(config: Config, calibration: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
     """Get all possible , return in a batch of size 1"""
     data_dir = os.path.join("data", config.dataset)
-    data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
+    name = "val.bin" if not calibration else "cal.bin"
+    data = np.memmap(os.path.join(data_dir, name), dtype=np.uint16, mode="r")
 
     ix = torch.arange(len(data) - config.block_size)
     x = torch.stack([torch.from_numpy((data[i : i + config.block_size]).astype(np.int64)) for i in ix])
