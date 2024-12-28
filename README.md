@@ -1,7 +1,7 @@
 
 ### My fork of nanoGPT
 
-Read about it in my blog post: notyet.
+Read about it in my blog post: [My fork of Karpathy's nanoGPT](https://jsalvasoler.vercel.app/my-fork-of-karpathynanogpt).
 
 What I've done:
 - Refactored `train.py` and `sample.py` to use `Config` class to store and manage configuration parameters.
