@@ -1,4 +1,14 @@
 
+### My fork of nanoGPT
+
+Read about it in my blog post: notyet.
+
+What I've done:
+- Refactored `train.py` and `sample.py` to use `Config` class to store and manage configuration parameters.
+- Added `evaluate.py` to evaluate the model perplexity and tokens per second.
+- Added `configurator.py` to manage the configuration parameters, and a `utils.py` to manage the data and model loading and saving.
+- Introduced some model quantization and inference optimizations, under the `evaluate.py` script.
+
 # nanoGPT
 
 ![nanoGPT](assets/nanogpt.jpg)
